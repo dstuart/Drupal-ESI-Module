@@ -1,0 +1,5 @@
+; $Id: esi.info$
+name = ESI
+description = Implements Edge Side Includes for Reverse Proxies
+package = Other
+core = "6.x"
