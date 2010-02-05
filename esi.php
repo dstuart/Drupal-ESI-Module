@@ -24,3 +24,4 @@
  * 
  * What do we do if the cache is empty after bootstrap??
  */
+echo '<!-- esi output //-->';
