@@ -8,7 +8,7 @@ class esi_cache_plugin_memcache implements Drupal_ESI_Cache_Plugin_Interface{
   }
   
   static function cache_is_default(){
-    return TRUE;
+    return FALSE;
   }
   
   static function cache_register(){

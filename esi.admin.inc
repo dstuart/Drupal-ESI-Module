@@ -26,7 +26,7 @@ function esi_settings() {
   $form['esi_rp']['esi_rp_plugins'] = array(
     '#type' => 'select',
     '#title' => t('Reverse proxy'),
-    '#default_value' => variable_get('esi_rp_plugin', 'default'),
+    '#default_value' => variable_get('esi_rp_plugin', 'esi_rp_plugin_varnish'),
     '#options' => $options,
     '#description' => t('The currently defined reverse proxy to use with ESI.'),
   );
@@ -39,11 +39,11 @@ function esi_settings() {
     '#collapsed' => FALSE,
     '#collapsible' => FALSE,
   ); 
-  $options = drupal_map_assoc(esi_get_cache_plugins());
+  $options = esi_get_cache_plugins();
   $form['esi_cache']['esi_cache_plugins'] = array(
     '#type' => 'select',
     '#title' => t('Caching plugin'),
-    '#default_value' => variable_get('esi_cache_plugin', 'default'),
+    '#default_value' => variable_get('esi_cache_plugin', 'esi_cache_plugin_drupal'),
     '#options' => $options,
     '#description' => t('The currently defined cache plugin.'),
   );
