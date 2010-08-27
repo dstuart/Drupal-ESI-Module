@@ -1,39 +1,55 @@
-// $Id: README.txt$
+REQUIREMENTS
 
-The rough plan so far......
+Use of the ESI module requires a reverse proxy with ESI support.
+Varnish would be a good choice.
 
-Goal:
-Create a Edge Side Includes module that will support reverse proxies with this functionality. It will be built in a abstracted and
-pluggable fashion so both the reverse proxies and the Drupal caching layer is exchangeable  
 
-Initial Implementation:
-Our initial effort is going be look at Varnish as seems to be well adopted in Drupal, but will design with the idea pluggable extensions 
-being added when needed.
+USING THE ESI MODULE
 
-Considerations:
- 1. If you only have one ESI call on a page this is very straight forward
- 2. We don't have a option 1 situation.
- 3. If you have multiple calls you could just do one call and use JavaScript to do DOM manipulation (again we can't due to accessibility 
-     on the site) the jquery (or equiv) can be passed back with the ESI data
- 
-Process flows;
+The ESI module will replace blocks with ESI include tags - which look like:
+<esi:include src="/esi/block/....." />
+The reverse-proxy will remove the ESI tags from the page, and replace each one
+with the appropriate block content.  The proxy should be configured to cache
+the block content appropriately for the block-cache configuration, so that
+blocks which change per-user or per-role have separate caches for each context.
+The example VCL demonstrates how this is done with Varnish.
 
-Requests: 
-    -> [path]esi.php[with arguments] 
-    -> controller picks up request loads appropriate config 
-       -> The config is chosen using settings admin UI but on save we write that information to both the db and to a settings/config file in a know
-            location on disk, the esi.php is then able to read that and have all the information necessary to draw from the chosen cache store
-            without having to bootstrap
-    -> a cache lookup is performed based url hash (plus salt or token or something/something)
-    -> If hit return the data
-    -> Fail invoke Frupal bootstrap and generate the data
-    
- Page building:
-   -> At the highest point in any given template create a controller ESI call this will include all of the other subsequent 
-        ESI calls on the page. This is where we will front load all the caching
-   -> All other ESI calls will only call the data needed
-   -> Initially we will use a get with args call e.g. [path to esi]/esi.php?q=node/[nid](or user etc)&
-          args=/module_function:salt:variables/module_function:salt:variables/etc
-      -> The salt could be a user_id, a node_id, other caching needs
-      -> variables are extra data need in full bootstrap etc
-   -> We should look at using blocks where possible for our ESI as placement it easy and UI configuration can be added
+
+ROLE-BASE COOKIES
+
+To support cacheing of role-based blocks, the proxy needs a way of recognising
+which roles a user has.  On login, a cookie is set by the ESI module with a
+unique hash for each combination of roles; for example, all users who have no
+role will have hash a; users who are in role foo (and only role foo) will have
+hash b; users who are in role foo and role bar will have hash c; etc.
+The proxy has no way of interpreting which roles a user has, but can
+distinguish each unique combination of roles.
+
+
+CONFIGURATION
+
+The module stores 3 variables:
+ - esi_seed_key_rotation_interval
+   How often the seed key should change (in seconds). Defaults to daily.
+
+ - esi_seed_key_last_changed
+   When the seed key was last changed (unix timestamp)
+
+ - esi_seed_key
+   The current 'seed' (a 32-character string)
+
+The esi_seed_key_rotation_interval variable may be configured in settings.php.
+In most cases, it's best to allow the module to manage the other 2 fields
+automatically.
+
+
+VARNISH VCLs
+
+Two VCLs are provided:
+- docs/esi_blocks.vcl
+  This VCL provided custom sub-routines to handle ESI-block integration.
+  This is designed to be included from another VCL.
+
+- docs/default.vcl
+  This is an example default.vcl, showing how the ESI-blocks VCL can be
+  included.

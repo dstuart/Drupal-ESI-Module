@@ -1,5 +1,7 @@
-; $Id: esi.info$
-name = ESI
-description = Implements Edge Side Includes for Reverse Proxies
-package = Other
-core = "6.x"
+; $Id$
+name = ESI - block integration
+description = "Allow Drupal blocks to be delivered via ESI (Edge-Side Includes).  Requires an ESI-capable proxy."
+package = Caching
+recommends[] = varnish
+core = 6.x
+php = 5.1
