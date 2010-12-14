@@ -1,7 +1,7 @@
 <?php
-// $Id$
+// $Id: esi.module,v 1.2 2010/11/17 11:37:25 manarth Exp $
 /**
- * @file esi.module
+ * @file
  *   Adds support for ESI (Edge-Side-Include) integration, allowing blocks to be\
  *   delivered by ESI, with support for per-block cache times.
  */
@@ -18,7 +18,7 @@ define('ESI__BLOCK_CONFIG_DEFAULT__TTL', 300);
 
 
 /**
- * Implementation of hook_theme
+ * Implementation of hook_theme().
  */
 function esi_theme() {
   return array(
@@ -30,7 +30,7 @@ function esi_theme() {
 }
 
 /**
- * Implementation of hook_theme_registry_alter.
+ * Implementation of hook_theme_registry_alter().
  * Override theme('blocks') to apply our ESI handler.
  */
 function esi_theme_registry_alter(&$theme_registry) {
@@ -46,7 +46,7 @@ function esi_theme_registry_alter(&$theme_registry) {
 
 
 /**
- * Implementation of hook_menu.
+ * Implementation of hook_menu().
  *   Define a menu-handler.
  */
 function esi_menu() {
@@ -63,14 +63,14 @@ function esi_menu() {
 
 
 /**
- * Implementation of hook_cron.
+ * Implementation of hook_cron().
  * Every interval, rotate the seed (used to generate the role-cookie).
  * (Each rotation will invalidate the varnish-cache for cached pre-role blocks).
  */
 function esi_cron() {
   $age = time() - variable_get('esi_seed_key_last_changed', 0);
   $interval = variable_get('esi_seed_key_rotation_interval', ESI__DEFAULT_SEED_KEY_ROTATION_INTERVAL);
-  if($age > $interval) {
+  if ($age > $interval) {
     require_once(dirname(__FILE__) . '/esi.inc');
     _esi__rotate_seed_key();
   }
@@ -78,7 +78,7 @@ function esi_cron() {
 
 
 /**
- * Implementation of hook_user.
+ * Implementation of hook_user().
  *   For maximum cache-efficiency, the proxy must be able to identify the roles
  *   held by a user.  A cookie is used which provides a consistent hash for
  *   all users who share the same roles.
@@ -87,15 +87,15 @@ function esi_cron() {
  */
 function esi_user($op, &$edit, &$account, $category = NULL) {
   // only respond to login/logout.
-  if(!($op == 'login' || $op == 'logout')) {
+  if (!($op == 'login' || $op == 'logout')) {
     return;
   }
 
   // Drupal session cookies use the name 'SESS' followed by an MD5 hash.
   // The role-cookie is the same, prefixes with the letter 'R'.
-  $cookie = array('name' => 'R'.session_name());
+  $cookie = array('name' => 'R' . session_name());
 
-  if($op == 'login') {
+  if ($op == 'login') {
     require_once(dirname(__FILE__) . '/esi.inc');
     $hash = _esi__get_roles_hash(array_keys($account->roles));
     $lifespan = min(variable_get('esi_seed_key_rotation_interval', ESI__DEFAULT_SEED_KEY_ROTATION_INTERVAL), ini_get('session.cookie_lifetime'));
@@ -118,7 +118,7 @@ function esi_user($op, &$edit, &$account, $category = NULL) {
 
 
 /**
- * Implementation of hook_form_FORM_ID_alter
+ * Implementation of hook_form_FORM_ID_alter().
  * for block_admin_configure
  *   Add ESI-configuration options to the block-config pages.
  */
@@ -131,14 +131,14 @@ function esi_form_block_admin_configure_alter(&$form, $form_state) {
   $module = $form['module']['#value'];
   $delta  = $form['delta']['#value'];
   $config = _esi__block_settings($module, $delta);
-  
+
   $element['esi_config'] = array(
     '#type' => 'fieldset',
     '#title' => t('ESI settings'),
     '#description' => t('Control how this block is cached on an ESI-enabled reverse proxy.'),
     '#tree' => TRUE,
   );
-  
+
   $element['esi_config']['enabled'] = array(
     '#type' => 'checkbox',
     '#title' => t('Enable ESI'),
@@ -157,8 +157,8 @@ function esi_form_block_admin_configure_alter(&$form, $form_state) {
   // inject our ESI config-fieldset onto the form,
   // just after the 'block_settings' fieldset.
   $i = 1;
-  foreach($form as $key => $value) {
-    if($key == 'block_settings') {
+  foreach ($form as $key => $value) {
+    if ($key == 'block_settings') {
       break;
     }
     $i++;
@@ -202,11 +202,11 @@ function esi__block_handler($bid, $page = NULL) {
    * Expect the bid format to be theme:region:module:delta
    * Fail if this doesn't match.
    */
-  if(!substr_count($bid, ':') == 3) {
+  if (!substr_count($bid, ':') == 3) {
     return FALSE;
   }
   list($theme, $region, $module, $delta) = explode(':', $bid);
-  
+
   // Block content may change per-page.
   // If this is true for the current block, the origin page url should be
   // provided as an argument.
@@ -227,27 +227,27 @@ function esi__block_handler($bid, $page = NULL) {
    * No-cache is header (TTL) controlled.
    * Per-page is passed as a url argument
    */
-  if($block->cache == BLOCK_NO_CACHE) {
+  if ($block->cache == BLOCK_NO_CACHE) {
     header("Cache-Control: no-cache, max-age=0");
   }
-  elseif($block->cache & BLOCK_CACHE_PER_USER) {
+  elseif ($block->cache & BLOCK_CACHE_PER_USER) {
     // "Cache-control: private" advises proxies that the content is
     // user-specific.  Most proxies will not cache this data - a clever proxy
     // config may make this cacheable.
     header("Cache-Control: private");
     header("X-BLOCK-CACHE: " . BLOCK_CACHE_PER_USER);
   }
-  elseif($block->cache & BLOCK_CACHE_PER_ROLE) {
+  elseif ($block->cache & BLOCK_CACHE_PER_ROLE) {
     header("Cache-Control: private");
     header("X-BLOCK-CACHE: " . BLOCK_CACHE_PER_ROLE);
   }
 
   // For all cacheable blocks, set the TTL based on the block config.
-  if($block->cache != BLOCK_NO_CACHE) {
+  if ($block->cache != BLOCK_NO_CACHE) {
     $config = _esi__block_settings($module, $delta);
     header("Cache-Control: max-age={$config->ttl}");
   }
 
-  echo $output;  
-  return null;
+  echo $output;
+  return NULL;
 }

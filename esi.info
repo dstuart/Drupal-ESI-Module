@@ -1,7 +1,253 @@
-; $Id$
-name = ESI - block integration
-description = "Allow Drupal blocks to be delivered via ESI (Edge-Side Includes).  Requires an ESI-capable proxy."
-package = Caching
-recommends[] = varnish
-core = 6.x
-php = 5.1
+<?php
+// $Id: esi.module,v 1.2 2010/11/17 11:37:25 manarth Exp $
+/**
+ * @file
+ *   Adds support for ESI (Edge-Side-Include) integration, allowing blocks to be\
+ *   delivered by ESI, with support for per-block cache times.
+ */
+
+// Default interval for rotating the seed key: defaults to change-daily.
+define('ESI__DEFAULT_SEED_KEY_ROTATION_INTERVAL', 86400);
+
+// Default ESI setting for blocks: enabled
+define('ESI__BLOCK_CONFIG_DEFAULT__IS_ENABLED', TRUE);
+
+// Default TTL for blocks: 5 minutes
+define('ESI__BLOCK_CONFIG_DEFAULT__TTL', 300);
+
+
+
+/**
+ * Implementation of hook_theme().
+ */
+function esi_theme() {
+  return array(
+    'esi_tag' => array(
+      'arguments' => array('block' => array()),
+      'file' => 'esi.theme.inc',
+    ),
+  );
+}
+
+/**
+ * Implementation of hook_theme_registry_alter().
+ * Override theme('blocks') to apply our ESI handler.
+ */
+function esi_theme_registry_alter(&$theme_registry) {
+  // override the default theme function for theme('blocks').
+  $path = drupal_get_path('module', 'esi');
+  $theme_registry['blocks']['function'] = 'esi__theme_blocks';
+  $theme_registry['blocks']['file'] = 'esi.theme.inc';
+  $theme_registry['blocks']['include files'] = array( "./{$path}/esi.theme.inc");
+  $theme_registry['blocks']['theme path']  = $path;
+  $theme_registry['blocks']['theme paths'] = array($path);
+}
+
+
+
+/**
+ * Implementation of hook_menu().
+ *   Define a menu-handler.
+ */
+function esi_menu() {
+  return array(
+    'esi/block/%' => array(
+      'title' => 'ESI handler',
+      'page callback' => 'esi__block_handler',
+      'page arguments' => array(2),
+      'access callback' => TRUE,
+      'type' => MENU_CALLBACK
+    )
+  );
+}
+
+
+/**
+ * Implementation of hook_cron().
+ * Every interval, rotate the seed (used to generate the role-cookie).
+ * (Each rotation will invalidate the varnish-cache for cached pre-role blocks).
+ */
+function esi_cron() {
+  $age = time() - variable_get('esi_seed_key_last_changed', 0);
+  $interval = variable_get('esi_seed_key_rotation_interval', ESI__DEFAULT_SEED_KEY_ROTATION_INTERVAL);
+  if ($age > $interval) {
+    require_once(dirname(__FILE__) . '/esi.inc');
+    _esi__rotate_seed_key();
+  }
+}
+
+
+/**
+ * Implementation of hook_user().
+ *   For maximum cache-efficiency, the proxy must be able to identify the roles
+ *   held by a user.  A cookie is used which provides a consistent hash for
+ *   all users who share the same roles.
+ *   For security, the hash uses a random seed which is rotated (by hook_cron)
+ *   at regular intervals - defaults to daily.
+ */
+function esi_user($op, &$edit, &$account, $category = NULL) {
+  // only respond to login/logout.
+  if (!($op == 'login' || $op == 'logout')) {
+    return;
+  }
+
+  // Drupal session cookies use the name 'SESS' followed by an MD5 hash.
+  // The role-cookie is the same, prefixes with the letter 'R'.
+  $cookie = array('name' => 'R' . session_name());
+
+  if ($op == 'login') {
+    require_once(dirname(__FILE__) . '/esi.inc');
+    $hash = _esi__get_roles_hash(array_keys($account->roles));
+    $lifespan = min(variable_get('esi_seed_key_rotation_interval', ESI__DEFAULT_SEED_KEY_ROTATION_INTERVAL), ini_get('session.cookie_lifetime'));
+    $cookie += array(
+      'value' => $hash,
+      'expire' => time() + $lifespan,
+    );
+  }
+  else {
+    $cookie += array(
+      'value' => 'deleted',
+      'expire' => 1,
+    );
+  }
+  setcookie($cookie['name'], $cookie['value'], $cookie['expire']);
+}
+
+
+
+
+
+/**
+ * Implementation of hook_form_FORM_ID_alter().
+ * for block_admin_configure
+ *   Add ESI-configuration options to the block-config pages.
+ */
+function esi_form_block_admin_configure_alter(&$form, $form_state) {
+  // TODO: describe how the cache configs can be configured as defaults in code.
+
+  // load our helper functions
+  require_once(dirname(__FILE__) . '/esi.inc');
+
+  $module = $form['module']['#value'];
+  $delta  = $form['delta']['#value'];
+  $config = _esi__block_settings($module, $delta);
+
+  $element['esi_config'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('ESI settings'),
+    '#description' => t('Control how this block is cached on an ESI-enabled reverse proxy.'),
+    '#tree' => TRUE,
+  );
+
+  $element['esi_config']['enabled'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Enable ESI'),
+    '#default_value' => $config->enabled,
+  );
+
+  $options = _esi__ttl_options($config->ttl);
+  $element['esi_config']['ttl'] = array(
+    '#type' => 'select',
+    '#title' => t('TTL'),
+    '#description' => t('Time-to-live on the proxy-cache.'),
+    '#options' => $options,
+    '#default_value' => $config->ttl,
+  );
+
+  // inject our ESI config-fieldset onto the form,
+  // just after the 'block_settings' fieldset.
+  $i = 1;
+  foreach ($form as $key => $value) {
+    if ($key == 'block_settings') {
+      break;
+    }
+    $i++;
+  }
+  $f = array_slice($form, 0, $i);
+  $f += $element;
+  $f += array_slice($form, $i);
+  $form = $f;
+
+  // add a submit-handler to save our config.
+  $form['#submit'][] = 'esi__block_config_save';
+}
+
+/**
+ * Form-submit handler for ESI settings in block-config
+ */
+function esi__block_config_save($form, $form_state) {
+  require_once(dirname(__FILE__) . '/esi.inc');
+
+  $module = $form_state['values']['module'];
+  $delta  = $form_state['values']['delta'];
+
+  $config = new stdClass;
+  $config->enabled = $form_state['values']['esi_config']['enabled'];
+  $config->ttl     = $form_state['values']['esi_config']['ttl'];
+
+  _esi__block_settings($module, $delta, $config);
+}
+
+
+
+/**
+ * Menu handler for ESIs
+ *
+ * Render a particular block.
+ */
+function esi__block_handler($bid, $page = NULL) {
+  require_once(dirname(__FILE__)  . '/esi.inc');
+
+  /**
+   * Expect the bid format to be theme:region:module:delta
+   * Fail if this doesn't match.
+   */
+  if (!substr_count($bid, ':') == 3) {
+    return FALSE;
+  }
+  list($theme, $region, $module, $delta) = explode(':', $bid);
+
+  // Block content may change per-page.
+  // If this is true for the current block, the origin page url should be
+  // provided as an argument.
+  if ($page) {
+    $_GET['q'] = base64_decode($page);
+  }
+
+  // theme set-up.
+  // we need to do this manually, because output is echo'd instead of returned.
+  init_theme();
+
+  // get the block into a format that can be passed to view-blockk.
+  $block = _esi__get_block($theme, $region, $module, $delta);
+  $output = theme('block', $block);
+  /**
+   * Pass PER-USER or PER-ROLE cache info to varnish.
+   *
+   * No-cache is header (TTL) controlled.
+   * Per-page is passed as a url argument
+   */
+  if ($block->cache == BLOCK_NO_CACHE) {
+    header("Cache-Control: no-cache, max-age=0");
+  }
+  elseif ($block->cache & BLOCK_CACHE_PER_USER) {
+    // "Cache-control: private" advises proxies that the content is
+    // user-specific.  Most proxies will not cache this data - a clever proxy
+    // config may make this cacheable.
+    header("Cache-Control: private");
+    header("X-BLOCK-CACHE: " . BLOCK_CACHE_PER_USER);
+  }
+  elseif ($block->cache & BLOCK_CACHE_PER_ROLE) {
+    header("Cache-Control: private");
+    header("X-BLOCK-CACHE: " . BLOCK_CACHE_PER_ROLE);
+  }
+
+  // For all cacheable blocks, set the TTL based on the block config.
+  if ($block->cache != BLOCK_NO_CACHE) {
+    $config = _esi__block_settings($module, $delta);
+    header("Cache-Control: max-age={$config->ttl}");
+  }
+
+  echo $output;
+  return NULL;
+}

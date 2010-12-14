@@ -2,6 +2,8 @@
 #man page for details on VCL syntax and semantics.
 #
 
+# The VCL syntax changed between Varnish versions.
+# TODO: Document the VCL differences.
 
 # load the ESI-blocks VCL
 # This should be in the same folder, or given an absolute path to the VCL.

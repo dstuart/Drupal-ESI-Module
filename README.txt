@@ -49,6 +49,7 @@ Two VCLs are provided:
 - docs/esi_blocks.vcl
   This VCL provided custom sub-routines to handle ESI-block integration.
   This is designed to be included from another VCL.
+  NB: There is also a doc/esi_blocks-2_0.vcl for people that are using varnish < 2.1
 
 - docs/default.vcl
   This is an example default.vcl, showing how the ESI-blocks VCL can be

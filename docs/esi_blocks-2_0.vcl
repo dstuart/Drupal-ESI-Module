@@ -62,7 +62,7 @@ sub esi_block__recv {
   # Ignore presence of cookies, etc, for ESI requests:
   # Always try to lookup ESIs from the cache.
   if(req.url ~ "^/esi.*") {
-    return(lookup);
+    lookup;
   }
 }
 
@@ -73,9 +73,9 @@ sub esi_block__recv {
 sub esi_block__fetch {
   # ESI blocks with per-user or per-role config have a cache-control: private
   # header.  This removes the header and inserts the block into the cache.
-  if( beresp.http.Cache-Control ~ "private" ) {
-    unset beresp.http.Set-Cookie;
-    unset beresp.http.Cache-Control;
-    return(deliver);
+  if( obj.http.Cache-Control ~ "private" ) {
+    unset obj.http.Set-Cookie;
+    unset obj.http.Cache-Control;
+    deliver;
   }
 }

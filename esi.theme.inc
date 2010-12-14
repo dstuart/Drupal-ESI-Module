@@ -1,7 +1,7 @@
 <?php
-// $Id$
+// $Id: esi.theme.inc,v 1.2 2010/11/17 11:37:25 manarth Exp $
 /**
- * @file esi.theme.inc
+ * @file
  *   Theme handlers for the ESI module.
  */
 
@@ -12,7 +12,7 @@ function esi__theme_blocks($region) {
   $output = '';
   // load our helper file.
   require_once(dirname(__FILE__) . '/esi.inc');
-  
+
   if ($list = block_list($region)) {
     foreach ($list as $key => $block) {
       // if ESI's enabled on the block, add an ESI tag instead of block content.
@@ -42,13 +42,13 @@ function theme_esi_tag($block) {
   $params = array();
 
   // if the block uses per-page cacheing, add the page param to the URL.
-  if($block->cache & BLOCK_CACHE_PER_PAGE) {
+  if ($block->cache & BLOCK_CACHE_PER_PAGE) {
     $src .= '/' . base64_encode($_GET['q']);
   }
 
   // Finally, if the cache-mode is PER-USER or PER-ROLE, advise the proxy.
   // Ideally, the proxy will remove this parameter.
-  if($block->cache & BLOCK_CACHE_PER_USER || $block->cache & BLOCK_CACHE_PER_ROLE) {
+  if ($block->cache & BLOCK_CACHE_PER_USER || $block->cache & BLOCK_CACHE_PER_ROLE) {
     $src .= '/CACHE=' . ($block->cache & BLOCK_CACHE_PER_USER ? 'USER' : 'ROLE');
   }
 

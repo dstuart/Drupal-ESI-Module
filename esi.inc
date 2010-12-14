@@ -1,7 +1,7 @@
 <?php
-// $Id$
+// $Id: esi.inc,v 1.2 2010/11/17 11:37:25 manarth Exp $
 /**
- * @file esi.inc
+ * @file
  *   Helper functions for the ESI module.
  */
 
@@ -10,7 +10,7 @@
  */
 function _esi__get_seed_key() {
   $seed = variable_get('esi_seed_key', FALSE);
-  if(!$seed) {
+  if (!$seed) {
     $seed = _esi__rotate_seed_key();
   }
   return $seed;
@@ -31,7 +31,7 @@ function _esi__rotate_seed_key() {
  */
 function _esi__get_random_seed() {
   $seed = '';
-  for($i=0; $i<32; $i++) {
+  for ($i=0; $i<32; $i++) {
     // get a random character from the printable ASCII character set: 32-176
     $seed += chr(mt_rand(32, 176));
   }
@@ -69,7 +69,7 @@ function _esi__get_block($theme, $region, $module, $delta) {
   global $theme_key;
   $theme_key = $theme;
   init_theme();
-  
+
   $blocks = block_list($region);
   return $blocks["{$module}_{$delta}"];
 }
@@ -83,11 +83,11 @@ function _esi__block_settings($module, $delta, $config = NULL) {
   $key = "{$module}_{$delta}";
   $global = variable_get('esi_block_config', array());
 
-  if($config) {
+  if ($config) {
     $global[$key] = $config;
     variable_set('esi_block_config', $global);
   }
-  elseif(array_key_exists($key, $global)) {
+  elseif (array_key_exists($key, $global)) {
     $config = $global[$key];
   }
   else {
@@ -118,7 +118,7 @@ function _esi__ttl_options($current_ttl) {
     '86400' => t('1 day'),
   );
   // if the given ttl isn't one of our options, add the current ttl as a custom option.
-  if(!array_key_exists($current_ttl, $options)) {
+  if (!array_key_exists($current_ttl, $options)) {
     $options[$current_ttl] = format_plural($current_ttl, 'Custom: @count second', 'Custom: @count seconds');
   }
   return $options;
